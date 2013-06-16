@@ -1,4 +1,4 @@
-version = '1.5.4-SNAPSHOT'
+version = '1.6.0-SNAPSHOT'
 defaultTasks 'clean','build'
 apply plugin: 'java'
 apply plugin: 'idea'
@@ -9,7 +9,7 @@ ext.rundeckPluginVersion= '1.1'
  * Set this to a comma-separated list of full classnames of your implemented Rundeck
  * plugins.
  */
-ext.pluginClassNames='com.dtolabs.rundeck.plugin.webdav.WebdavLogFileStoragePlugin'
+ext.pluginClassNames='org.rundeck.plugins.WebdavLogFileStoragePlugin'
 
 
 repositories {
@@ -39,7 +39,7 @@ dependencies {
     pluginLibs group: 'sardine', name: 'sardine', version: '5.0'
     
     //the compile dependency won't add the rundeck-core jar to the plugin contents
-    compile group: 'org.rundeck', name: 'rundeck-core', version: '1.5.4-SNAPSHOT'
+    compile group: 'org.rundeck', name: 'rundeck-core', version: '1.6.0-SNAPSHOT'
 }
 
 // task to copy plugin libs to output/lib dir
