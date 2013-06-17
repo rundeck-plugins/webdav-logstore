@@ -1,6 +1,7 @@
 package org.rundeck.plugins;
 
 
+import com.dtolabs.rundeck.core.logging.LogFileStorageException;
 import com.dtolabs.rundeck.core.plugins.Plugin;
 import com.dtolabs.rundeck.plugins.descriptions.PluginDescription;
 import com.dtolabs.rundeck.plugins.descriptions.PluginProperty;
@@ -24,7 +25,7 @@ import java.util.logging.Logger;
  * Example plugin which copies log files to a WebDAV store
  */
 @Plugin(service = ServiceNameConstants.LogFileStorage, name = "webdav-logstore")
-@PluginDescription(title = "Webdav Log File Storage Plugin", description = "Webdav Log File Storage")
+@PluginDescription(title = "WebDAV Log File Storage Plugin", description = "Webdav Log File Storage")
 public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
     static final Logger logger = Logger.getLogger(WebdavLogFileStoragePlugin.class.getName());
 
@@ -35,7 +36,7 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
     @PluginProperty(
             title = "Path",
             required = true,
-            description = "The path in the webdav to store a log file. You can use these " +
+            description = "The path in the WebDAV to store a log file. You can use these " +
                     "expansion variables: (${job.execid} = execution ID, ${job.project} = project name, " +
                     "${job.id} = job UUID (or blank)." +
                     " Default: "
@@ -64,15 +65,16 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
 
     /**
      * Add collections referenced in the resourcePath after the webdavUrl.
+     * Creates intermediate collections as needed.
      *
      * @param resourcePath Collection to create.
      *
      * @return true if the collection was created successfully.
      *
-     * @throws IOException   Webdav method errors are thrown if the server request fails.
+     * @throws IOException   WebDAV method errors are thrown if the server request fails.
      * Exception info contains the HTTP response code.
      */
-    private boolean makeCollection(final String resourcePath) throws IOException {
+    private boolean createCollection(final String resourcePath) throws IOException {
 
         boolean success = false;
         final Sardine sardine = SardineFactory.begin(webdavUsername, webdavPassword);
@@ -96,42 +98,35 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
 
             // Create the next level in the resource path.
             sardine.createDirectory(collectionPath.toString());
-            logger.log(Level.INFO, "Created webdav sub-collection: {0}", new Object[]{collectionPath.toString()});
+            logger.log(Level.INFO, "Created WebDAV collection: {0}", new Object[]{collectionPath.toString()});
 
-            // Recurse to the next level of the path.
-            logger.log(Level.FINE, "Recursive call: makeCollection collection: {0}",
-                    new Object[]{resourcePath});
-
-            success = makeCollection(resourcePath);
+            // iterate to next path token.
         }
 
         return success;
     }
 
-    public boolean store(final InputStream stream, final long length, final Date modtime) throws IOException {
+    public boolean store(final InputStream stream, final long length, final Date modtime)
+            throws IOException, LogFileStorageException {
         logger.log(Level.FINE, "Storing log to {0}/{1}", new Object[]{webdavUrl,expandedPath});
         Sardine sardine = SardineFactory.begin(webdavUsername, webdavPassword);
 
         // The expandedPath contains the file resource but we want to create the parent collection if needed.
         final String collection =  new File(expandedPath).getParent();
-        try {
-            if (! sardine.exists(webdavUrl+"/"+collection)) {
-                // Create the collection.
-                makeCollection(webdavUrl+"/"+collection);
-            }
-
-            // Add the resource to the store.
-            sardine.put(webdavUrl+"/"+expandedPath, stream);
-            logger.log(Level.INFO, "Stored log to {0}/{1}", new Object[]{webdavUrl,expandedPath});
-        } catch (Throwable e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
+        if (!sardine.exists(webdavUrl + "/" + collection)) {
+            // Create the collection.
+            createCollection(webdavUrl + "/" + collection);
         }
+
+        // Add the resource to the store.
+        sardine.put(webdavUrl + "/" + expandedPath, stream);
+        logger.log(Level.INFO, "Stored log to {0}/{1}", new Object[]{webdavUrl, expandedPath});
+
 
         return true;
     }
 
-    public boolean retrieve(final OutputStream stream) throws IOException {
+    public boolean retrieve(final OutputStream stream) throws IOException, LogFileStorageException {
 
         logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl,expandedPath});
 
@@ -177,16 +172,14 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
 
         final Sardine sardine = SardineFactory.begin(webdavUsername,webdavPassword);
 
-        boolean state;
+        boolean available;
         try {
-            state = sardine.exists(webdavUrl+"/"+expandedPath)? true : false;
+            available = sardine.exists(webdavUrl + "/" + expandedPath);
         } catch (IOException e) {
             e.printStackTrace(System.err);
-            state = false;
+            available = false;
         }
-
-        logger.log(Level.SEVERE, "call getState {0}", state);
-        return state;
+        return available;
     }
     /**
      * Expands the path format using the context data
