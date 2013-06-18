@@ -47,16 +47,19 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
 
     @PluginProperty(
             title="WebDAV URL",
-            required = true
+            required = true,
+            description = "The WebDAV base URL."
     )
     private String webdavUrl;
 
-    @PluginProperty(title="WebDAV username", required = true)
+    @PluginProperty(title="WebDAV username", required = true,
+            description = "The WebDAV account username")
     private String webdavUsername;
-    @PluginProperty(title="WebDAV password", required = true)
+    @PluginProperty(title="WebDAV password", required = true,
+            description = "The WebDAV account password")
     private String webdavPassword;
 
-
+    // The value of the path after the tokens have been replaced by the context data.
     private String expandedPath;
 
     public WebdavLogFileStoragePlugin() {
@@ -119,19 +122,29 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
         }
 
         // Add the resource to the store.
-        sardine.put(webdavUrl + "/" + expandedPath, stream);
+        try {
+            sardine.put(webdavUrl + "/" + expandedPath, stream);
+        } catch (IOException e) {
+            throw new LogFileStorageException("Log location: "
+                +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
+        }
         logger.log(Level.INFO, "Stored log to {0}/{1}", new Object[]{webdavUrl, expandedPath});
-
 
         return true;
     }
 
     public boolean retrieve(final OutputStream stream) throws IOException, LogFileStorageException {
 
-        logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl,expandedPath});
+        logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl, expandedPath});
 
         final Sardine sardine = SardineFactory.begin(webdavUsername, webdavPassword);
-        final InputStream input = sardine.get(webdavUrl+"/"+expandedPath);
+        final InputStream input;
+        try {
+            input = sardine.get(webdavUrl + "/" + expandedPath);
+        } catch (IOException e) {
+            throw new LogFileStorageException("Log location: "
+                    + webdavUrl + "/" + expandedPath + ". Reason: " + e.getMessage(), e);
+        }
 
         boolean finished = false;
         try {
