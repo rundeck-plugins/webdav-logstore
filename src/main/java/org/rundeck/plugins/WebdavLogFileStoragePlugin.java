@@ -133,6 +133,21 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
         return true;
     }
 
+    public boolean isAvailable() throws LogFileStorageException {
+        logger.log(Level.FINE, "Getting state about log {0}/{1}", new Object[]{webdavUrl,expandedPath});
+
+        final Sardine sardine = SardineFactory.begin(webdavUsername,webdavPassword);
+
+        boolean available;
+        try {
+            available = sardine.exists(webdavUrl + "/" + expandedPath);
+        } catch (IOException e) {
+            throw new LogFileStorageException("Log location: "
+                    +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
+        }
+        return available;
+    }
+
     public boolean retrieve(final OutputStream stream) throws IOException, LogFileStorageException {
 
         logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl, expandedPath});
@@ -182,20 +197,6 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
     }
 
 
-    public boolean isAvailable() throws LogFileStorageException {
-        logger.log(Level.FINE, "Getting state about log {0}/{1}", new Object[]{webdavUrl,expandedPath});
-
-        final Sardine sardine = SardineFactory.begin(webdavUsername,webdavPassword);
-
-        boolean available;
-        try {
-            available = sardine.exists(webdavUrl + "/" + expandedPath);
-        } catch (IOException e) {
-            throw new LogFileStorageException("Log location: "
-                    +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
-        }
-        return available;
-    }
     /**
      * Expands the path format using the context data
      *
