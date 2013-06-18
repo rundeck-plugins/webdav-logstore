@@ -164,11 +164,13 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
             throw new IllegalArgumentException("expanded value of path must not end with /");
         }
 
+        logger.log(Level.FINE, "Expanded path for the log {0}/{1}", new Object[]{webdavUrl,expandedPath});
+
     }
 
 
-    public boolean isAvailable() {
-        logger.log(Level.INFO, "Getting state about {0}/{1}", new Object[]{webdavUrl,expandedPath});
+    public boolean isAvailable() throws LogFileStorageException {
+        logger.log(Level.FINE, "Getting state about log {0}/{1}", new Object[]{webdavUrl,expandedPath});
 
         final Sardine sardine = SardineFactory.begin(webdavUsername,webdavPassword);
 
@@ -176,8 +178,8 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
         try {
             available = sardine.exists(webdavUrl + "/" + expandedPath);
         } catch (IOException e) {
-            e.printStackTrace(System.err);
-            available = false;
+            throw new LogFileStorageException("Log location: "
+                    +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
         }
         return available;
     }
