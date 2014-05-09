@@ -1,4 +1,4 @@
-version = '1.0.2'
+version = '2.1.0'
 defaultTasks 'clean','build'
 apply plugin: 'java'
 apply plugin: 'idea'
@@ -39,7 +39,7 @@ dependencies {
     pluginLibs group: 'sardine', name: 'sardine', version: '5.0'
     
     //the compile dependency won't add the rundeck-core jar to the plugin contents
-    compile group: 'org.rundeck', name: 'rundeck-core', version: '1.6.0-SNAPSHOT'
+    compile group: 'org.rundeck', name: 'rundeck-core', version: '2.1.0'
 }
 
 // task to copy plugin libs to output/lib dir

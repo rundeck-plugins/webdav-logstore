@@ -1,12 +1,12 @@
 package org.rundeck.plugins;
 
 
-import com.dtolabs.rundeck.core.logging.LogFileStorageException;
+import com.dtolabs.rundeck.core.logging.ExecutionFileStorageException;
 import com.dtolabs.rundeck.core.plugins.Plugin;
 import com.dtolabs.rundeck.plugins.descriptions.PluginDescription;
 import com.dtolabs.rundeck.plugins.descriptions.PluginProperty;
 import com.dtolabs.rundeck.plugins.ServiceNameConstants;
-import com.dtolabs.rundeck.plugins.logging.LogFileStoragePlugin;
+import com.dtolabs.rundeck.plugins.logging.ExecutionFileStoragePlugin;
 import com.dtolabs.utils.Streams;
 
 import com.github.sardine.Sardine;
@@ -24,12 +24,12 @@ import java.util.logging.Logger;
 /**
  * Example plugin which copies log files to a WebDAV store
  */
-@Plugin(service = ServiceNameConstants.LogFileStorage, name = "webdav-logstore")
+@Plugin(service = ServiceNameConstants.ExecutionFileStorage, name = "webdav-logstore")
 @PluginDescription(title = "WebDAV Log File Storage Plugin", description = "Webdav Log File Storage")
-public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
+public class WebdavLogFileStoragePlugin implements ExecutionFileStoragePlugin {
     static final Logger logger = Logger.getLogger(WebdavLogFileStoragePlugin.class.getName());
 
-    public static final String DEFAULT_PATH_FORMAT = "rundeck/projects/${job.project}/${job.execid}.rdlog";
+    public static final String DEFAULT_PATH_FORMAT = "rundeck/projects/${job.project}/${job.execid}";
 
     private Map<String, ?> context;
 
@@ -60,7 +60,7 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
     private String webdavPassword;
 
     // The value of the path after the tokens have been replaced by the context data.
-    private String expandedPath;
+    private String resolvedDavPath;
 
     public WebdavLogFileStoragePlugin() {
     }
@@ -109,13 +109,15 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
         return success;
     }
 
-    public boolean store(final InputStream stream, final long length, final Date modtime)
-            throws IOException, LogFileStorageException {
-        logger.log(Level.FINE, "Storing log to {0}/{1}", new Object[]{webdavUrl,expandedPath});
+    public boolean store(final String filetype, final InputStream stream, final long length, final Date modtime)
+            throws IOException, ExecutionFileStorageException {
+        final String filepath = resolvedDavPath +"."+filetype;
+
+        logger.log(Level.FINE, "Storing log to {0}/{1}", new Object[]{webdavUrl, filepath});
         Sardine sardine = SardineFactory.begin(webdavUsername, webdavPassword);
 
-        // The expandedPath contains the file resource but we want to create the parent collection if needed.
-        final String collection =  new File(expandedPath).getParent();
+        // The resolvedDavPath contains the file resource but we want to create the parent collection if needed.
+        final String collection =  new File(filepath).getParent();
         if (!sardine.exists(webdavUrl + "/" + collection)) {
             // Create the collection.
             createCollection(webdavUrl + "/" + collection);
@@ -123,42 +125,44 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
 
         // Add the resource to the store.
         try {
-            sardine.put(webdavUrl + "/" + expandedPath, stream);
+            sardine.put(webdavUrl + "/" + filepath, stream);
         } catch (IOException e) {
-            throw new LogFileStorageException("Log location: "
-                +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
+            throw new ExecutionFileStorageException("Log location: "
+                +webdavUrl+"/"+ filepath +". Reason: " +e.getMessage(), e);
         }
-        logger.log(Level.INFO, "Stored log to {0}/{1}", new Object[]{webdavUrl, expandedPath});
+        logger.log(Level.INFO, "Stored log to {0}/{1}", new Object[]{webdavUrl, filepath});
 
         return true;
     }
 
-    public boolean isAvailable() throws LogFileStorageException {
-        logger.log(Level.FINE, "Getting state about log {0}/{1}", new Object[]{webdavUrl,expandedPath});
+    public boolean isAvailable(final String filetype) throws ExecutionFileStorageException {
+        final String filepath = resolvedDavPath +"."+filetype;
+        logger.log(Level.FINE, "Getting state about log {0}/{1}", new Object[]{webdavUrl,filepath});
 
         final Sardine sardine = SardineFactory.begin(webdavUsername,webdavPassword);
 
         boolean available;
         try {
-            available = sardine.exists(webdavUrl + "/" + expandedPath);
+            available = sardine.exists(webdavUrl + "/" + filepath);
         } catch (IOException e) {
-            throw new LogFileStorageException("Log location: "
-                    +webdavUrl+"/"+expandedPath+". Reason: " +e.getMessage(), e);
+            throw new ExecutionFileStorageException("Log location: "
+                    +webdavUrl+"/"+filepath+". Reason: " +e.getMessage(), e);
         }
         return available;
     }
 
-    public boolean retrieve(final OutputStream stream) throws IOException, LogFileStorageException {
+    public boolean retrieve(final String filetype, final OutputStream stream) throws IOException, ExecutionFileStorageException {
+        final String filepath = resolvedDavPath +"."+filetype;
 
-        logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl, expandedPath});
+        logger.log(Level.INFO, "Retrieving log from {0}/{1}", new Object[]{webdavUrl, filepath});
 
         final Sardine sardine = SardineFactory.begin(webdavUsername, webdavPassword);
         final InputStream input;
         try {
-            input = sardine.get(webdavUrl + "/" + expandedPath);
+            input = sardine.get(webdavUrl + "/" + filepath);
         } catch (IOException e) {
-            throw new LogFileStorageException("Log location: "
-                    + webdavUrl + "/" + expandedPath + ". Reason: " + e.getMessage(), e);
+            throw new ExecutionFileStorageException("Log location: "
+                    + webdavUrl + "/" + filepath + ". Reason: " + e.getMessage(), e);
         }
 
         boolean finished = false;
@@ -182,17 +186,17 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
         }
         String configpath = getPath();
         if (!configpath.contains("${job.execid}") && configpath.endsWith("/")) {
-            configpath = path + "/${job.execid}.rdlog";
+            configpath = path + "/${job.execid}";
         }
-        expandedPath = expandPath(configpath, context);
-        if (null == expandedPath || "".equals(expandedPath.trim())) {
-            throw new IllegalArgumentException("expanded value of path was empty");
+        resolvedDavPath = replacePathVariables(configpath, context);
+        if (null == resolvedDavPath || "".equals(resolvedDavPath.trim())) {
+            throw new IllegalArgumentException("expanded value of path was empty. configured path: " + configpath);
         }
-        if (expandedPath.endsWith("/")) {
+        if (resolvedDavPath.endsWith("/")) {
             throw new IllegalArgumentException("expanded value of path must not end with /");
         }
 
-        logger.log(Level.FINE, "Expanded path for the log {0}/{1}", new Object[]{webdavUrl,expandedPath});
+        logger.log(Level.FINE, "Expanded path for the log {0}/{1}", new Object[]{webdavUrl, resolvedDavPath});
 
     }
 
@@ -205,7 +209,7 @@ public class WebdavLogFileStoragePlugin implements LogFileStoragePlugin {
      *
      * @return
      */
-    static String expandPath(String pathFormat, Map<String, ? extends Object> context) {
+    static String replacePathVariables(String pathFormat, Map<String, ? extends Object> context) {
         String result = pathFormat.replaceAll("^/+", "");
         if (null != context) {
             result = result.replaceAll("\\$\\{job.execid\\}", notNull(context, "execid", ""));
