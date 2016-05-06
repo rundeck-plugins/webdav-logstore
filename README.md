@@ -29,8 +29,14 @@ Add WebDAV connection info to the /etc/rundeck/framework.properties:
     framework.plugin.LogFileStorage.webdav-logstore.webdavUrl = $WEBDAV_URL
     framework.plugin.LogFileStorage.webdav-logstore.webdavUsername = admin
     framework.plugin.LogFileStorage.webdav-logstore.webdavPassword = admin
+    
+In older versions of rundeck < 2.5 add this line
+
     framework.plugin.LogFileStorage.webdav-logstore.path = rundeck/projects/${job.project}/${job.execid}.rdlog
 
+newer versions > 2.5 
+
+    framework.plugin.LogFileStorage.webdav-logstore.path = rundeck/projects/${job.project}/${job.execid}
 
 * `webdavUrl` should be the base URL to the WebDAV log store.
 * `webdavUsername` is the login account to the store.
